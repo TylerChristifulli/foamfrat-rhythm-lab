@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The SA Node Drives the Beat</title>
+<style>
+  :root{
+    --bg-0:#08090c;
+    --bg-1:#0f1116;
+    --panel:rgba(255,255,255,.045);
+    --panel-2:rgba(255,255,255,.025);
+    --stroke:rgba(255,255,255,.09);
+    --stroke-2:rgba(255,255,255,.05);
+    --text:#f5f5f7;
+    --text-2:#9a9aa2;
+    --text-3:#6a6a72;
+    --red:#ff453a;        /* SA node / atria / P wave */
+    --red-soft:#ff6b62;
+    --blue:#0a84ff;       /* T wave */
+    --mint:#34e3a0;       /* ECG trace */
+    --amber:#ffd60a;
+    font-synthesis:none;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(255,69,58,.10), transparent 60%),
+      radial-gradient(1000px 800px at 10% 110%, rgba(10,132,255,.08), transparent 55%),
+      linear-gradient(180deg,var(--bg-1),var(--bg-0));
+    color:var(--text);
+    min-height:100%;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:-.01em;
+    overflow-x:hidden;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:30px 26px 40px}
+  header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:22px}
+  .title h1{font-size:25px;font-weight:600;letter-spacing:-.02em}
+  .title p{color:var(--text-2);font-size:14px;margin-top:5px;max-width:560px;line-height:1.45}
+  .brand{font-size:12px;color:var(--text-3);font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+
+  .grid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(440px,1.55fr);gap:18px}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--stroke);
+    border-radius:22px;
+    backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px);
+    box-shadow:0 30px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+    position:relative;
+    overflow:hidden;
+  }
+  .card-pad{padding:22px}
+
+  /* ---- Heart panel ---- */
+  .heart-card{display:flex;flex-direction:column}
+  .heart-stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:8px 8px 0}
+  svg.heart{width:100%;max-width:360px;height:auto;display:block}
+
+  .sa-hit{cursor:pointer;}
+  .sa-hit:active{transform:scale(.96)}
+  #avHit:hover #avRing{stroke-opacity:.55}
+
+  .label{font-size:10.5px;fill:var(--text-3);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+  .label-accent{fill:var(--red-soft)}
+
+  .hint{
+    text-align:center;color:var(--text-2);font-size:13px;line-height:1.5;
+    padding:4px 18px 20px;
+  }
+  .hint b{color:var(--text);font-weight:600}
+
+  /* ---- Monitor panel ---- */
+  .monitor-card{display:flex;flex-direction:column}
+  .hud{display:flex;align-items:center;gap:26px;padding:20px 22px 14px;border-bottom:1px solid var(--stroke-2);flex-wrap:wrap}
+  .bpm{display:flex;align-items:baseline;gap:8px}
+  .bpm .num{
+    font-size:62px;font-weight:600;line-height:.9;
+    font-variant-numeric:tabular-nums;letter-spacing:-.04em;
+    color:var(--mint);min-width:118px;text-align:right;
+    text-shadow:0 0 26px rgba(52,227,160,.35);
+    transition:color .25s ease;
+  }
+  .bpm .unit{font-size:14px;color:var(--text-2);font-weight:600;letter-spacing:.02em}
+  .rhythm{display:flex;flex-direction:column;gap:5px}
+  .rhythm .name{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .rhythm .sub{font-size:12.5px;color:var(--text-2);line-height:1.35;max-width:240px;min-height:17px}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;align-self:flex-start;
+    padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;letter-spacing:.01em;
+    background:rgba(255,214,10,.12);color:var(--amber);border:1px solid rgba(255,214,10,.3);
+    opacity:0;transform:translateY(-2px);transition:opacity .3s,transform .3s;
+  }
+  .pill.on{opacity:1;transform:none}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber)}
+
+  .strip-wrap{position:relative;padding:14px}
+  canvas#ecg{width:100%;display:block;border-radius:14px;background:#06070a}
+  .legend{display:flex;gap:18px;padding:2px 10px 18px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);font-weight:500}
+  .legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .lg-p{background:var(--red)}
+  .lg-t{background:var(--blue)}
+  .lg-trace{width:18px;height:3px;border-radius:2px;background:var(--mint)}
+
+  /* ---- Controls ---- */
+  .controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+  .btn{
+    appearance:none;border:1px solid var(--stroke);background:var(--panel-2);color:var(--text);
+    font:inherit;font-size:13.5px;font-weight:600;padding:10px 16px;border-radius:12px;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .08s;display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16)}
+  .btn:active{transform:translateY(1px)}
+  .btn.toggle.on{background:rgba(48,209,88,.16);border-color:rgba(48,209,88,.4);color:#7af0b0}
+  .seg{display:flex;align-items:center;gap:11px;background:var(--panel-2);border:1px solid var(--stroke);border-radius:12px;padding:8px 14px}
+  .seg label{font-size:12.5px;color:var(--text-2);font-weight:600}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:150px;height:4px;border-radius:3px;
+    background:rgba(255,255,255,.16);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:17px;height:17px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.5);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{width:17px;height:17px;border:none;border-radius:50%;background:#fff;cursor:pointer}
+  .seg .val{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600;min-width:30px;text-align:right}
+  .foot{margin-top:20px;color:var(--text-3);font-size:11.5px;text-align:center;letter-spacing:.01em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1>The SA Node Drives the Beat</h1>
+      <p>Click the sinoatrial node to fire a beat. Each impulse spreads through the atria, pauses at the AV node, then races down the His&ndash;Purkinje system. Tap faster and watch the P waves climb into the T waves.</p>
+    </div>
+    <div class="brand">FOAMfrat &middot; Rhythm Lab</div>
+  </header>
+
+  <div class="grid">
+    <!-- HEART -->
+    <div class="card heart-card">
+      <div class="heart-stage">
+        <svg class="heart" viewBox="0 0 340 380" id="heartSvg">
+          <defs>
+            <radialGradient id="saGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff7a70"/>
+              <stop offset="55%" stop-color="#ff453a"/>
+              <stop offset="100%" stop-color="#b81c14"/>
+            </radialGradient>
+            <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="6"/>
+            </filter>
+          </defs>
+
+          <!-- chamber base shapes -->
+          <g id="chambers">
+            <!-- atria -->
+            <rect id="atriaRA" x="44"  y="44" rx="26" ry="26" width="118" height="92" fill="#ff453a" fill-opacity="0.14" stroke="rgba(255,255,255,.10)"/>
+            <rect id="atriaLA" x="178" y="44" rx="26" ry="26" width="118" height="92" fill="#ff453a" fill-opacity="0.10" stroke="rgba(255,255,255,.08)"/>
+            <!-- ventricles -->
+            <path id="ventRV" class="sa-hit" pointer-events="all" d="M40 156 q-6 96 40 150 q34 30 62 12 V156 q0 -8 -8 -8 H52 q-12 0 -12 8 Z" fill="#ff453a" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.4"/>
+            <path id="ventLV" class="sa-hit" pointer-events="all" d="M186 148 H300 q14 0 14 14 q4 120 -54 178 q-40 34 -74 6 V156 q0 -8 14 -8 Z" fill="#ff453a" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.4"/>
+            <!-- repol overlays (blue) -->
+            <path id="ventRVb" d="M40 156 q-6 96 40 150 q34 30 62 12 V156 q0 -8 -8 -8 H52 q-12 0 -12 8 Z" fill="#0a84ff" fill-opacity="0" pointer-events="none"/>
+            <path id="ventLVb" d="M186 148 H300 q14 0 14 14 q4 120 -54 178 q-40 34 -74 6 V156 q0 -8 14 -8 Z" fill="#0a84ff" fill-opacity="0" pointer-events="none"/>
+            <!-- septum -->
+            <line x1="170" y1="50" x2="170" y2="330" stroke="rgba(255,255,255,.07)" stroke-width="2"/>
+          </g>
+
+          <!-- conduction wiring -->
+          <g fill="none" stroke-linecap="round">
+            <path id="his"  d="M163 138 V178" stroke="#ffd60a" stroke-opacity="0.22" stroke-width="3.5"/>
+            <path id="rbb"  d="M163 178 C 130 200, 96 224, 86 268" stroke="#ffd60a" stroke-opacity="0.22" stroke-width="3"/>
+            <path id="lbb"  d="M163 178 C 200 202, 238 226, 250 274" stroke="#ffd60a" stroke-opacity="0.22" stroke-width="3"/>
+            <g id="purk" stroke="#ffd60a" stroke-opacity="0.22" stroke-width="2">
+              <path d="M86 268 l-12 16 M86 268 l4 20 M86 268 l16 12"/>
+              <path d="M250 274 l-16 14 M250 274 l-2 20 M250 274 l14 14"/>
+            </g>
+          </g>
+
+          <!-- AV node (clickable: fires a junctional beat, no P wave) -->
+          <g class="sa-hit" id="avHit">
+            <circle cx="163" cy="140" r="22" fill="#000" fill-opacity="0" pointer-events="all"/>
+            <circle id="avRing" cx="163" cy="140" r="15" fill="none" stroke="#ffd60a" stroke-opacity="0" stroke-width="2"/>
+            <circle id="avNode" cx="163" cy="140" r="9" fill="#ffd60a" fill-opacity="0.35" stroke="rgba(255,255,255,.2)"/>
+          </g>
+
+          <!-- SA node glow + hit target -->
+          <circle id="saHalo" cx="120" cy="60" r="13" fill="url(#saGlow)" filter="url(#soft)" opacity="0.55"/>
+          <g class="sa-hit" id="saHit">
+            <circle id="saRing" cx="120" cy="60" r="20" fill="none" stroke="#ff453a" stroke-opacity="0.5" stroke-width="2"/>
+            <circle id="saNode" cx="120" cy="60" r="12" fill="url(#saGlow)"/>
+          </g>
+
+          <!-- labels -->
+          <text class="label label-accent" x="120" y="30" text-anchor="middle">SA Node</text>
+          <text class="label" x="201" y="158" text-anchor="start">AV Node</text>
+          <text class="label" x="104" y="100" text-anchor="middle">Atria &middot; P</text>
+          <text class="label" x="240" y="240" text-anchor="middle">Ventricles</text>
+          <text class="label" x="240" y="254" text-anchor="middle">QRS &middot; T</text>
+        </svg>
+      </div>
+      <div class="hint">Tap the <b style="color:var(--red-soft)">SA node</b> for sinus rhythm, the <b style="color:var(--amber)">AV node</b> for a junctional beat (narrow QRS, small inverted P), or a <b style="color:#fff">ventricle</b> for a ventricular beat: a wide, bizarre QRS with no P and a T pointing the opposite way.</div>
+    </div>
+
+    <!-- MONITOR -->
+    <div class="card monitor-card">
+      <div class="hud">
+        <div class="bpm"><div class="num" id="bpmNum">&ndash;&ndash;</div><div class="unit">BPM</div></div>
+        <div class="rhythm">
+          <div class="name" id="rhythmName">Awaiting impulse</div>
+          <div class="sub" id="rhythmSub">No pacemaker activity. Fire the SA node to start.</div>
+          <div class="pill" id="camelPill"><span class="dot"></span>Camel-hump T waves &middot; P riding the T</div>
+        </div>
+      </div>
+      <div class="strip-wrap">
+        <canvas id="ecg" width="900" height="300"></canvas>
+      </div>
+      <div class="legend">
+        <span><i class="lg-trace"></i>Lead II trace</span>
+        <span><i class="lg-p"></i>P wave (atrial)</span>
+        <span><i class="lg-t"></i>T wave (ventricular repolarization)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="resetBtn">Reset strip</button>
+    <button class="btn toggle on" id="soundBtn">Metronome tick: On</button>
+    <div class="seg">
+      <button class="btn toggle" id="autoBtn" style="padding:6px 12px">Auto-pace</button>
+      <label>Rate</label>
+      <input type="range" id="autoRate" min="40" max="210" value="75">
+      <span class="val" id="autoVal">75</span>
+    </div>
+  </div>
+
+  <div class="foot">P waves are mapped in red and T waves in blue, just like the lecture &mdash; watch them collide above 130&ndash;150 BPM. Built for live classroom use.</div>
+</div>
+
+<script>
+(()=>{
+  "use strict";
+
+  // ---------- waveform model (time in ms relative to P-wave onset) ----------
+  const g = (t,mu,s)=>Math.exp(-((t-mu)*(t-mu))/(2*s*s));
+  // morphology offsets: P at ~50ms, QRS ~168ms, T peak ~380ms
+  const P_PEAK=50, T_PEAK=380, BEAT_TAIL=780, BEAT_HEAD=-60;
+  function beatValue(tau,src){
+    if(tau<BEAT_HEAD||tau>BEAT_TAIL) return 0;
+    if(src==='v'){
+      // ventricular origin: no P, VERY wide slurred/notched QRS, late discordant T
+      const R1 = 0.92*g(tau,165,42);  // broad slurred upstroke
+      const R2 = 0.58*g(tau,225,42);  // second hump -> notched, bizarre look
+      const S  = -0.45*g(tau,295,46); // wide, deep downstroke
+      const T  = -0.30*g(tau,505,78); // discordant (inverted), delayed
+      return R1+R2+S+T;
+    }
+    // sinus: upright P early. junctional: small inverted (retrograde) P just before the QRS
+    const P = (src==='av') ? -0.10*g(tau,120,15) : 0.135*g(tau,P_PEAK,20);
+    const Q = -0.06*g(tau,150,7);
+    const R = 1.00*g(tau,168,9);
+    const S = -0.17*g(tau,188,9);
+    const T = 0.28*g(tau,T_PEAK,42);
+    return P+Q+R+S+T;
+  }
+
+  // ---------- state ----------
+  let beats=[];                 // performance.now() timestamps of SA firings
+  let soundOn=true, autoOn=false, autoBPM=75, lastAuto=0;
+  const WINDOW=5400;            // ms shown across the strip
+
+  // ---------- elements ----------
+  const cv=document.getElementById('ecg'), ctx=cv.getContext('2d');
+  const bpmNum=document.getElementById('bpmNum');
+  const rhythmName=document.getElementById('rhythmName');
+  const rhythmSub=document.getElementById('rhythmSub');
+  const camelPill=document.getElementById('camelPill');
+  const saHit=document.getElementById('saHit');
+  const saNode=document.getElementById('saNode');
+  const saHalo=document.getElementById('saHalo');
+  const saRing=document.getElementById('saRing');
+  const atriaRA=document.getElementById('atriaRA');
+  const atriaLA=document.getElementById('atriaLA');
+  const avNode=document.getElementById('avNode');
+  const avRing=document.getElementById('avRing');
+  const avHit=document.getElementById('avHit');
+  const his=document.getElementById('his'), rbb=document.getElementById('rbb'),
+        lbb=document.getElementById('lbb'), purk=document.getElementById('purk');
+  const ventRV=document.getElementById('ventRV'), ventLV=document.getElementById('ventLV');
+  const ventRVb=document.getElementById('ventRVb'), ventLVb=document.getElementById('ventLVb');
+
+  // ---------- crisp canvas ----------
+  function sizeCanvas(){
+    const r=cv.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    cv.width=Math.round(r.width*dpr);
+    cv.height=Math.round((r.width*0.42)*dpr); // keep a wide strip ratio
+    cv.style.height=(r.width*0.42)+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  // ---------- audio tick ----------
+  let actx=null;
+  function tick(){
+    if(!soundOn) return;
+    try{
+      if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.state==='suspended') actx.resume();
+      const o=actx.createOscillator(), gNode=actx.createGain();
+      o.type='sine'; o.frequency.value=880;
+      gNode.gain.setValueAtTime(0.0001,actx.currentTime);
+      gNode.gain.exponentialRampToValueAtTime(0.14,actx.currentTime+0.005);
+      gNode.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+0.09);
+      o.connect(gNode).connect(actx.destination);
+      o.start(); o.stop(actx.currentTime+0.1);
+    }catch(e){}
+  }
+
+  // ---------- fire a beat ----------
+  function fireBeat(src){
+    src = src || 'sa';
+    beats.push({t:performance.now(), src:src});
+    tick();
+    if(src==='av') avFlash=performance.now();
+    else if(src==='v') vFlash=performance.now();
+    else saFlash=performance.now();
+  }
+  let saFlash=0, avFlash=0, vFlash=0;
+
+  // SA ring invitation pulse + click flash
+  function paintSA(now){
+    const idle = beats.length===0 || (now-beats[beats.length-1].t)>1600;
+    // breathing ring when idle to invite a click
+    const br = idle ? (0.4+0.35*Math.sin(now/420)) : 0.25;
+    saRing.setAttribute('r', (idle? (19+3*Math.sin(now/420)) : 18).toFixed(1));
+    saRing.setAttribute('stroke-opacity', br.toFixed(2));
+    const f = Math.max(0, 1-(now-saFlash)/140);
+    saNode.setAttribute('r',(12+5*f).toFixed(1));
+    saHalo.setAttribute('opacity',(0.5+0.5*f).toFixed(2));
+  }
+
+  function paintAV(now){
+    const idle = beats.length===0 || (now-beats[beats.length-1].t)>1600;
+    const base = idle ? (0.18+0.16*(0.5+0.5*Math.sin(now/520))) : 0.12;
+    avRing.setAttribute('stroke-opacity', base.toFixed(2));
+    const f = Math.max(0, 1-(now-avFlash)/150);
+    avNode.setAttribute('r',(9+5*f).toFixed(1));
+  }
+
+  function paintVent(now){
+    const idle = beats.length===0 || (now-beats[beats.length-1].t)>1600;
+    let s = idle ? (0.10+0.14*(0.5+0.5*Math.sin(now/640))) : 0.10;
+    const f = Math.max(0, 1-(now-vFlash)/170);
+    if(f>0) s = Math.max(s, 0.25+0.7*f);
+    ventRV.setAttribute('stroke-opacity', s.toFixed(2));
+    ventLV.setAttribute('stroke-opacity', s.toFixed(2));
+  }
+
+  // ---------- heart conduction lighting ----------
+  function paintHeart(now){
+    const lb = beats.length? beats[beats.length-1] : null;
+    const p = lb ? (now-lb.t) : 1e9;    // ms since latest impulse
+    const src = lb ? lb.src : 'sa';
+    // atrial depol: forward for sinus, retrograde for junctional, none for ventricular
+    const aI = (src==='sa') ? g(p,45,42) : (src==='av') ? 0.55*g(p,115,34) : 0;
+    // AV node lights as origin for junctional, as a relay for sinus, idle for ventricular
+    const avI= (src==='av') ? g(p,18,26) : (src==='sa') ? g(p,125,30) : 0;
+    const vI = g(p,190, src==='v'?98:46);   // ventricular depol (broader/longer when ventricular)
+    const condI = (src==='v') ? 0 : vI;      // ventricular beats bypass the His-Purkinje wiring
+    const tPk = (src==='v') ? 505 : T_PEAK;
+    const tI = g(p,tPk,62);                  // repolarization (T)
+
+    atriaRA.setAttribute('fill-opacity',(0.14+0.7*aI).toFixed(3));
+    atriaLA.setAttribute('fill-opacity',(0.10+0.6*aI).toFixed(3));
+    avNode.setAttribute('fill-opacity',(0.30+0.65*avI).toFixed(3));
+    const cond=(0.20+0.78*condI).toFixed(3);
+    his.setAttribute('stroke-opacity',cond);
+    rbb.setAttribute('stroke-opacity',cond);
+    lbb.setAttribute('stroke-opacity',cond);
+    purk.setAttribute('stroke-opacity',cond);
+    ventRV.setAttribute('fill-opacity',(0.12+0.72*vI).toFixed(3));
+    ventLV.setAttribute('fill-opacity',(0.12+0.72*vI).toFixed(3));
+    ventRVb.setAttribute('fill-opacity',(0.45*tI).toFixed(3));
+    ventLVb.setAttribute('fill-opacity',(0.45*tI).toFixed(3));
+  }
+
+  // ---------- rate / rhythm ----------
+  function currentRate(now){
+    if(beats.length<2) return null;
+    if(now-beats[beats.length-1].t>2400) return null; // gone quiet
+    // average of up to last 4 RR intervals
+    const k=Math.min(4,beats.length-1); let sum=0;
+    for(let i=beats.length-1;i>beats.length-1-k;i--) sum+=beats[i].t-beats[i-1].t;
+    const rr=sum/k;
+    return 60000/rr;
+  }
+
+  function updateHUD(now){
+    const bpm=currentRate(now);
+    const lb = beats.length ? beats[beats.length-1] : null;
+    const src = lb ? lb.src : null;
+    let merging=false;
+    if(bpm){
+      bpmNum.textContent=Math.round(bpm);
+      const rr=60000/bpm;
+      if(src==='v'){
+        let name;
+        if(bpm<40) name="Idioventricular Rhythm";
+        else if(bpm<=120) name="Accelerated Idioventricular Rhythm";
+        else name="Ventricular Tachycardia";
+        rhythmName.textContent=name;
+        rhythmSub.textContent="Impulse from the ventricle \u2014 wide QRS, no P, T wave discordant to the QRS.";
+        bpmNum.style.color = bpm>120 ? "#ff453a" : "#ff9f0a";
+      }else if(src==='av'){
+        let name;
+        if(bpm<60) name="Junctional Escape Rhythm";
+        else if(bpm<=100) name="Accelerated Junctional Rhythm";
+        else name="Junctional Tachycardia";
+        rhythmName.textContent=name;
+        rhythmSub.textContent="Impulse from the AV junction \u2014 narrow QRS with a small inverted (retrograde) P just ahead.";
+        bpmNum.style.color = bpm>100 ? "#ffd60a" : "#34e3a0";
+      }else{
+        merging = rr < 470;
+        let name,sub;
+        if(bpm<60){name="Sinus Bradycardia";sub="Slow but origin is still the SA node.";}
+        else if(bpm<=100){name="Normal Sinus Rhythm";sub="Discrete P wave before every QRS.";}
+        else if(bpm<=150){name="Sinus Tachycardia";sub=merging?"P waves beginning to ride up onto the preceding T wave.":"Still sinus. Each P wave is its own.";}
+        else{name="Sinus Tachycardia";sub="High rate, but still sinus. P waves are buried in the T \u2014 don\u2019t mistake this for SVT.";}
+        rhythmName.textContent=name;
+        rhythmSub.textContent=sub;
+        bpmNum.style.color = bpm>150 ? "#ff9f0a" : (bpm>100? "#ffd60a":"#34e3a0");
+      }
+    }else{
+      bpmNum.textContent="\u2013\u2013";
+      bpmNum.style.color="#34e3a0";
+      rhythmName.textContent= beats.length? (src==='av'?"Junctional beat": src==='v'?"Ventricular beat":"Paced beat"):"Awaiting impulse";
+      rhythmSub.textContent= beats.length? "Keep tapping to establish a rate.":"No pacemaker activity. Fire the SA or AV node to start.";
+    }
+    camelPill.classList.toggle('on', !!(bpm&&merging));
+  }
+
+  // ---------- draw ECG ----------
+  function drawECG(now){
+    const W=cv.clientWidth, H=cv.clientHeight;
+    const baseY=H*0.62, yScale=H*0.42;
+    ctx.clearRect(0,0,W,H);
+
+    // grid
+    ctx.lineWidth=1;
+    ctx.strokeStyle="rgba(255,255,255,.045)";
+    const pxPerMs=W/WINDOW;
+    // verticals every 200ms
+    const t0=now-WINDOW;
+    let firstLine=Math.ceil(t0/200)*200;
+    ctx.beginPath();
+    for(let t=firstLine;t<=now;t+=200){
+      const x=(t-t0)*pxPerMs; ctx.moveTo(x,0); ctx.lineTo(x,H);
+    }
+    for(let y=baseY%30;y<H;y+=30){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    ctx.stroke();
+    // bold 1s lines
+    ctx.strokeStyle="rgba(255,255,255,.09)";
+    ctx.beginPath();
+    let firstSec=Math.ceil(t0/1000)*1000;
+    for(let t=firstSec;t<=now;t+=1000){const x=(t-t0)*pxPerMs;ctx.moveTo(x,0);ctx.lineTo(x,H);}
+    ctx.stroke();
+
+    // prune
+    beats=beats.filter(b=>b.t>now-WINDOW-BEAT_TAIL-200);
+
+    const sumAt=t=>{let v=0;for(let i=0;i<beats.length;i++){const tau=t-beats[i].t;if(tau>=BEAT_HEAD&&tau<=BEAT_TAIL)v+=beatValue(tau,beats[i].src);}return v;};
+    const xOf=t=>(t-t0)*pxPerMs;
+    const yOf=v=>baseY - v*yScale;
+
+    // trace — sample on a fine fixed time grid (not per-pixel) and force exact
+    // Q/R/S apex points so the narrow R peak never aliases as the strip scrolls
+    const STEP=1.5; // ms between samples
+    const times=[];
+    for(let t=t0;t<=now;t+=STEP) times.push(t);
+    for(let i=0;i<beats.length;i++){
+      const b=beats[i].t;
+      const marks=[b+150,b+168,b+188]; // Q, R, S apex times
+      for(let m=0;m<marks.length;m++){ if(marks[m]>=t0 && marks[m]<=now) times.push(marks[m]); }
+    }
+    times.sort((a,c)=>a-c);
+
+    ctx.beginPath();
+    for(let i=0;i<times.length;i++){
+      const t=times[i];
+      const x=(t-t0)*pxPerMs;
+      const y=yOf(sumAt(t));
+      if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.lineWidth=2.4;
+    ctx.strokeStyle="#34e3a0";
+    ctx.shadowColor="rgba(52,227,160,.55)";
+    ctx.shadowBlur=8;
+    ctx.lineJoin="round";
+    ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // P (red) and T (blue) markers per beat
+    let lastMergeX=null;
+    for(let i=0;i<beats.length;i++){
+      const b=beats[i].t, src=beats[i].src;
+      const pPeak = (src==='av') ? 120 : P_PEAK; // retrograde P sits later, just before the QRS
+      const tPk   = (src==='v')  ? 505 : T_PEAK; // ventricular T is later and discordant
+      const pt=b+pPeak, tt=b+tPk;
+      // T marker (every beat has a T)
+      if(tt>=t0 && tt<=now){
+        const x=xOf(tt), y=yOf(sumAt(tt));
+        dot(x,y,4.2,"#0a84ff");
+      }
+      // P marker — upright (sinus) or inverted (junctional), both atrial so both red.
+      // ventricular beats have no P.
+      if(src!=='v' && pt>=t0 && pt<=now){
+        const x=xOf(pt), y=yOf(sumAt(pt));
+        dot(x,y,4.2,"#ff453a");
+        // camel-hump merge only applies to sinus P-on-T
+        if(src==='sa' && i>0){
+          const rel=b-beats[i-1].t;
+          if(rel>=300 && rel<=480) lastMergeX={x:xOf(b),y:yOf(sumAt(b))};
+        }
+      }
+    }
+
+    // camel-hump callout on the most recent overlap
+    if(lastMergeX && lastMergeX.x>60 && lastMergeX.x<W-10){
+      const {x,y}=lastMergeX;
+      ctx.strokeStyle="rgba(255,214,10,.7)";
+      ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.moveTo(x,y-14);ctx.lineTo(x,y-30);ctx.stroke();
+      ctx.fillStyle="rgba(255,214,10,.95)";
+      ctx.font="600 11px -apple-system,system-ui,sans-serif";
+      ctx.textAlign="center";
+      ctx.fillText("P on T",x,y-36);
+    }
+  }
+  function dot(x,y,r,c){
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=6;ctx.fill();ctx.shadowBlur=0;
+  }
+
+  // ---------- main loop ----------
+  function loop(){
+    const now=performance.now();
+    if(autoOn){
+      const interval=60000/autoBPM;
+      if(now-lastAuto>=interval){ lastAuto=now; fireBeat('sa'); }
+    }
+    paintSA(now);
+    paintAV(now);
+    paintVent(now);
+    paintHeart(now);
+    updateHUD(now);
+    drawECG(now);
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- events ----------
+  saHit.addEventListener('pointerdown',e=>{e.preventDefault();fireBeat('sa');});
+  avHit.addEventListener('pointerdown',e=>{e.preventDefault();fireBeat('av');});
+  ventRV.addEventListener('pointerdown',e=>{e.preventDefault();fireBeat('v');});
+  ventLV.addEventListener('pointerdown',e=>{e.preventDefault();fireBeat('v');});
+  window.addEventListener('keydown',e=>{
+    if(e.code==='Space'){e.preventDefault();fireBeat('sa');}
+    if(e.key==='j'||e.key==='J'){e.preventDefault();fireBeat('av');}
+    if(e.key==='v'||e.key==='V'){e.preventDefault();fireBeat('v');}
+  });
+
+  document.getElementById('resetBtn').addEventListener('click',()=>{beats=[];});
+  const soundBtn=document.getElementById('soundBtn');
+  soundBtn.addEventListener('click',()=>{
+    soundOn=!soundOn;
+    soundBtn.classList.toggle('on',soundOn);
+    soundBtn.textContent="Metronome tick: "+(soundOn?"On":"Off");
+  });
+  const autoBtn=document.getElementById('autoBtn');
+  autoBtn.addEventListener('click',()=>{
+    autoOn=!autoOn; lastAuto=performance.now()-99999;
+    autoBtn.classList.toggle('on',autoOn);
+    autoBtn.textContent=autoOn?"Auto-pace: On":"Auto-pace";
+  });
+  const autoRate=document.getElementById('autoRate'), autoVal=document.getElementById('autoVal');
+  autoRate.addEventListener('input',()=>{autoBPM=+autoRate.value;autoVal.textContent=autoRate.value;});
+
+  window.addEventListener('resize',sizeCanvas);
+  sizeCanvas();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
