@@ -4,11 +4,11 @@ An interactive, single-file web lesson that visualizes how the sinoatrial (SA) n
 
 ## Live demo
 
-If GitHub Pages is enabled for this repo, the lesson is available at:
+The lesson is live at:
 
-```
-https://<your-username>.github.io/foamfrat-rhythm-lab/
-```
+**https://rhythm.foamfratsandbox.com/**
+
+(Also served by GitHub Pages at `https://tylerchristifulli.github.io/foamfrat-rhythm-lab/`.)
 
 ## What's inside
 
